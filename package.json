@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Akshay's 12-Month Personal AI/ML Career Learning & Habit Tracker OS (Oct 2026 - Sep 2027)",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"

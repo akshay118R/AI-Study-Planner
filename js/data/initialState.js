@@ -3,6 +3,14 @@
  * Fully populated initial database state
  */
 import { PRIME_3_COURSE, INDIVIDUAL_ROADMAP_MONTHS, HABIT_DEFINITIONS } from './curriculum.js';
+import {
+  INITIAL_ROADMAP_YEAR,
+  INITIAL_ROADMAP_MONTHS,
+  INITIAL_ROADMAP_TOPICS,
+  INITIAL_ROADMAP_SUBTOPICS,
+  PRIME_3_TOPICS_LIST,
+  PRIME_3_MODULES_HIERARCHY
+} from './roadmapData.js';
 
 export function createInitialState() {
   // Build initial lessons dictionary with full 7-step criteria and 0-4 understanding scale
@@ -569,6 +577,13 @@ export function createInitialState() {
     dailyTasks: initialTasks,
     primeLessons,
     roadmapMonths,
+    // Phase 2 Relational Roadmap Database Entities
+    roadmap_year: INITIAL_ROADMAP_YEAR,
+    roadmap_months: INITIAL_ROADMAP_MONTHS,
+    roadmap_topics: INITIAL_ROADMAP_TOPICS,
+    roadmap_subtopics: INITIAL_ROADMAP_SUBTOPICS,
+    prime_topics: PRIME_3_TOPICS_LIST,
+    prime_modules: PRIME_3_MODULES_HIERARCHY,
     dsaProblems,
     projects,
     revisionItems,

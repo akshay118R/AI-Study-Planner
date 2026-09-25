@@ -5,6 +5,14 @@ import { getState, updateState } from '../data/storage.js';
 import { DSA_TOPICS, DSA_PLATFORMS, SKIP_REASONS, PROJECT_CATEGORIES } from '../data/curriculum.js';
 import { ICONS, getIcon } from './icons.js';
 import { rebalanceTasks } from '../services/taskGenerator.js';
+import {
+  getEnrichedRoadmapMonths,
+  updateRoadmapTopic,
+  toggleSubtopicCompletion,
+  addSubtopicToTopic,
+  updatePrimeTopic,
+  getRoadmapEntities
+} from '../services/roadmapEngine.js';
 
 let modalContainer = null;
 
@@ -665,3 +673,490 @@ export function openAdaptiveRebalanceModal(behindCount) {
     closeModal();
   };
 }
+
+/**
+ * ==================================================
+ * PHASE 2: MONTH DETAIL MODAL
+ * ==================================================
+ */
+export function openMonthDetailModal(monthId) {
+  initModalContainer();
+  const months = getEnrichedRoadmapMonths();
+  const month = months.find(m => m.id === monthId) || months[0];
+
+  let statusBadgeClass = 'badge-slate';
+  if (month.status === 'Completed') statusBadgeClass = 'badge-emerald';
+  else if (month.status === 'Current') statusBadgeClass = 'badge-primary';
+  else if (month.status === 'Needs Attention') statusBadgeClass = 'badge-amber';
+  else if (month.status === 'On Track') statusBadgeClass = 'badge-cyan';
+
+  modalContainer.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal-dialog" style="max-width: 680px; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">
+          <div>
+            <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--color-text-muted); text-transform: uppercase;">
+              ${month.month} ${month.year} · Month ${month.order} of 12
+            </div>
+            <h2 class="modal-title" style="font-size: 1.25rem; margin-top: 2px;">${month.title}</h2>
+          </div>
+          <button class="btn btn-ghost btn-icon" id="btn-close-modal">${ICONS.x}</button>
+        </div>
+
+        <div class="modal-body" style="overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+          <!-- Meta Grid -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; background: var(--color-bg-base); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border-subtle);">
+            <div>
+              <div style="font-size: 0.7rem; color: var(--color-text-muted); text-transform: uppercase;">Date Range</div>
+              <div style="font-size: 0.8rem; font-weight: 600; font-family: var(--font-mono);">${month.start_date} → ${month.end_date}</div>
+            </div>
+            <div>
+              <div style="font-size: 0.7rem; color: var(--color-text-muted); text-transform: uppercase;">Study Target</div>
+              <div style="font-size: 0.8rem; font-weight: 600;">${month.target_hours || 135}h (32h/wk)</div>
+            </div>
+            <div>
+              <div style="font-size: 0.7rem; color: var(--color-text-muted); text-transform: uppercase;">Status</div>
+              <div><span class="badge ${statusBadgeClass}">${month.status}</span></div>
+            </div>
+            <div>
+              <div style="font-size: 0.7rem; color: var(--color-text-muted); text-transform: uppercase;">Progress</div>
+              <div style="font-size: 0.8rem; font-weight: 700; color: var(--color-accent-emerald);">${month.progress}% (${month.completedTopicsCount}/${month.totalTopics} done)</div>
+            </div>
+          </div>
+
+          <p style="font-size: 0.82rem; color: var(--color-text-secondary); line-height: 1.5; margin: 0;">
+            ${month.description}
+          </p>
+
+          <div class="progress-bar-wrap" style="height: 6px;">
+            <div class="progress-bar-fill emerald" style="width: ${month.progress}%;"></div>
+          </div>
+
+          <!-- Topics Section -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h4 style="font-size: 0.95rem; font-weight: 700;">TOPICS (${month.totalTopics})</h4>
+              <span style="font-size: 0.72rem; color: var(--color-text-muted);">Click topic name to open deep details</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              ${month.topics.map(t => {
+                const isCompleted = t.status === 'Completed' || t.progress === 100;
+                let topicBadge = 'badge-slate';
+                if (t.status === 'Completed') topicBadge = 'badge-emerald';
+                else if (t.status === 'Learning') topicBadge = 'badge-primary';
+                else if (t.status === 'Practicing') topicBadge = 'badge-cyan';
+
+                return `
+                  <div class="topic-interactive-row ${isCompleted ? 'completed' : ''}" data-topic-id="${t.id}">
+                    <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                      <input type="checkbox" class="custom-checkbox month-topic-quick-cb"
+                        data-topic-id="${t.id}" ${isCompleted ? 'checked' : ''} />
+                      <div class="topic-open-detail" data-topic-id="${t.id}" style="cursor: pointer; flex: 1;">
+                        <span style="font-size: 0.86rem; font-weight: 600; ${isCompleted ? 'text-decoration: line-through; color: var(--color-text-muted);' : ''}">
+                          ${t.name}
+                        </span>
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--color-text-muted); margin-top: 2px;">
+                          <span class="badge badge-slate" style="font-size: 0.68rem;">${t.category}</span>
+                          <span>Target: ${t.target_date || 'Month-end'}</span>
+                          ${t.subtopics?.length ? `<span>· ${t.subtopics.filter(s => s.status === 'Completed').length}/${t.subtopics.length} subtopics</span>` : ''}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 10px;" class="topic-open-detail" data-topic-id="${t.id}">
+                      <div style="width: 50px; text-align: right; font-family: var(--font-mono); font-size: 0.75rem;">
+                        ${t.progress}%
+                      </div>
+                      <span class="badge ${topicBadge}" style="min-width: 80px; text-align: center;">${t.status}</span>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="border-top: 1px solid var(--color-border); padding-top: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-close-month-modal">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btn-close-modal').onclick = closeModal;
+  document.getElementById('btn-close-month-modal').onclick = closeModal;
+  document.getElementById('modal-backdrop').onclick = (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  };
+
+  // Quick checkbox toggle on topic
+  modalContainer.querySelectorAll('.month-topic-quick-cb').forEach(cb => {
+    cb.onchange = (e) => {
+      e.stopPropagation();
+      const topicId = e.target.getAttribute('data-topic-id');
+      const isChecked = e.target.checked;
+      updateRoadmapTopic(topicId, {
+        status: isChecked ? 'Completed' : 'Not Started',
+        progress: isChecked ? 100 : 0
+      });
+      openMonthDetailModal(monthId); // Refresh modal view
+    };
+  });
+
+  // Clicking a topic row opens Topic Detail modal
+  modalContainer.querySelectorAll('.topic-open-detail').forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const topicId = el.getAttribute('data-topic-id');
+      openTopicDetailModal(topicId, monthId);
+    };
+  });
+}
+
+/**
+ * ==================================================
+ * PHASE 2: TOPIC DETAIL MODAL
+ * ==================================================
+ */
+export function openTopicDetailModal(topicId, parentMonthId = null) {
+  initModalContainer();
+  const { topics, subtopics, primeTopics } = getRoadmapEntities();
+  const topic = topics.find(t => t.id === topicId);
+  if (!topic) return;
+
+  const topicSubtopics = subtopics.filter(s => s.topic_id === topic.id);
+  const relatedPrime = topic.related_prime_topic_id ? primeTopics.find(p => p.id === topic.related_prime_topic_id) : null;
+
+  modalContainer.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal-dialog" style="max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge badge-emerald">Track B: Individual Roadmap</span>
+              <span class="badge badge-slate">${topic.category}</span>
+            </div>
+            <h2 class="modal-title" style="font-size: 1.25rem; margin-top: 4px;">${topic.name}</h2>
+          </div>
+          <button class="btn btn-ghost btn-icon" id="btn-close-modal">${ICONS.x}</button>
+        </div>
+
+        <div class="modal-body" style="overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+          <!-- Description -->
+          <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin: 0; line-height: 1.5;">
+            ${topic.description || 'Core roadmap learning topic.'}
+          </p>
+
+          <!-- Status & Progress Controls -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: var(--color-bg-base); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border-subtle);">
+            <div class="form-group" style="margin: 0;">
+              <label class="form-label" style="font-size: 0.75rem;">Status</label>
+              <select class="form-select" id="detail-topic-status">
+                <option value="Not Started" ${topic.status === 'Not Started' ? 'selected' : ''}>Not Started</option>
+                <option value="Learning" ${topic.status === 'Learning' ? 'selected' : ''}>Learning</option>
+                <option value="Practicing" ${topic.status === 'Practicing' ? 'selected' : ''}>Practicing</option>
+                <option value="Completed" ${topic.status === 'Completed' ? 'selected' : ''}>Completed</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin: 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label class="form-label" style="font-size: 0.75rem;">Progress</label>
+                <span style="font-family: var(--font-mono); font-weight: 700; color: var(--color-accent-emerald);" id="progress-val-label">${topic.progress}%</span>
+              </div>
+              <input type="range" class="form-range" id="detail-topic-progress" min="0" max="100" value="${topic.progress}" style="width: 100%; accent-color: var(--color-accent-emerald);" />
+            </div>
+          </div>
+
+          <!-- Schedule & History Meta -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 0.75rem;">
+            <div style="background: var(--color-bg-base); padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle);">
+              <div style="color: var(--color-text-muted);">Start Date</div>
+              <div style="font-weight: 600; font-family: var(--font-mono);">${topic.start_date || '2026-10-01'}</div>
+            </div>
+            <div style="background: var(--color-bg-base); padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle);">
+              <div style="color: var(--color-text-muted);">Target Date</div>
+              <div style="font-weight: 600; font-family: var(--font-mono);">${topic.target_date || 'Target Month'}</div>
+            </div>
+            <div style="background: var(--color-bg-base); padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle);">
+              <div style="color: var(--color-text-muted);">Completion Date</div>
+              <div style="font-weight: 600; font-family: var(--font-mono);">${topic.completion_date || 'Incomplete'}</div>
+            </div>
+          </div>
+
+          <!-- Genuine Prime 3.0 Linkage Section -->
+          ${relatedPrime ? `
+            <div class="prime-linkage-callout">
+              ${getIcon('prime', 'text-cyan')}
+              <div>
+                <div style="font-size: 0.72rem; color: var(--color-accent-cyan); font-weight: 700; text-transform: uppercase;">
+                  Genuine Prime 3.0 Curriculum Connection
+                </div>
+                <div style="font-size: 0.85rem; font-weight: 600;">
+                  Related: ${relatedPrime.name} (${relatedPrime.category}) · Status: ${relatedPrime.status} (${relatedPrime.progress}%)
+                </div>
+              </div>
+            </div>
+          ` : `
+            <div style="padding: 8px 12px; background: var(--color-bg-base); border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--color-text-muted); border: 1px dashed var(--color-border);">
+              <span>Independent Track B Topic — completely separated from Prime 3.0 AI/ML course.</span>
+            </div>
+          `}
+
+          <!-- Subtopics Section -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h4 style="font-size: 0.85rem; font-weight: 700;">SUBTOPICS (${topicSubtopics.length})</h4>
+              <span style="font-size: 0.72rem; color: var(--color-text-muted);">Completing subtopics auto-updates topic %</span>
+            </div>
+
+            <div class="subtopic-list-box">
+              ${topicSubtopics.length === 0 ? `
+                <div style="font-size: 0.78rem; color: var(--color-text-muted); text-align: center; padding: 10px;">
+                  No subtopics yet. Add one below to track granular milestones!
+                </div>
+              ` : topicSubtopics.map(sub => {
+                const isSubDone = sub.status === 'Completed' || sub.progress === 100;
+                return `
+                  <div class="subtopic-check-row">
+                    <label style="display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer;">
+                      <input type="checkbox" class="custom-checkbox subtopic-cb" data-subtopic-id="${sub.id}" ${isSubDone ? 'checked' : ''} />
+                      <span style="font-size: 0.8rem; ${isSubDone ? 'text-decoration: line-through; color: var(--color-text-muted);' : ''}">
+                        ${sub.name}
+                      </span>
+                    </label>
+                    <span class="badge ${isSubDone ? 'badge-emerald' : 'badge-slate'}" style="font-size: 0.65rem;">
+                      ${isSubDone ? 'Done' : 'Pending'}
+                    </span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+            <!-- Add Subtopic Form -->
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <input type="text" class="form-input" id="new-subtopic-input" placeholder="Add custom subtopic milestone..." style="font-size: 0.8rem; padding: 6px 10px;" />
+              <button class="btn btn-secondary btn-sm" id="btn-add-subtopic" style="white-space: nowrap;">+ Add</button>
+            </div>
+          </div>
+
+          <!-- Notes Area -->
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" style="font-size: 0.75rem;">Study Notes & Implementation Insights</label>
+            <textarea class="form-textarea" id="detail-topic-notes" rows="3" placeholder="Key takeaways, edge cases, algorithms implemented, or reference links...">${topic.notes || ''}</textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="border-top: 1px solid var(--color-border); padding-top: 12px; justify-content: space-between;">
+          ${parentMonthId ? `
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-back-to-month">← Back to Month</button>
+          ` : `<span></span>`}
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-topic-modal">Close</button>
+            <button type="button" class="btn btn-primary" id="btn-save-topic-modal">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Attach controls
+  const progressInput = document.getElementById('detail-topic-progress');
+  const progressLabel = document.getElementById('progress-val-label');
+  const statusSelect = document.getElementById('detail-topic-status');
+  const notesArea = document.getElementById('detail-topic-notes');
+
+  progressInput.oninput = (e) => {
+    progressLabel.textContent = `${e.target.value}%`;
+    if (parseInt(e.target.value, 10) === 100) {
+      statusSelect.value = 'Completed';
+    } else if (parseInt(e.target.value, 10) > 0 && statusSelect.value === 'Not Started') {
+      statusSelect.value = 'Learning';
+    }
+  };
+
+  statusSelect.onchange = (e) => {
+    if (e.target.value === 'Completed') {
+      progressInput.value = 100;
+      progressLabel.textContent = '100%';
+    } else if (e.target.value === 'Not Started') {
+      progressInput.value = 0;
+      progressLabel.textContent = '0%';
+    }
+  };
+
+  // Subtopic toggle
+  modalContainer.querySelectorAll('.subtopic-cb').forEach(cb => {
+    cb.onchange = () => {
+      const subId = cb.getAttribute('data-subtopic-id');
+      toggleSubtopicCompletion(subId);
+      openTopicDetailModal(topicId, parentMonthId); // re-render to reflect new calculated topic %
+    };
+  });
+
+  // Add subtopic
+  const addSubBtn = document.getElementById('btn-add-subtopic');
+  const newSubInput = document.getElementById('new-subtopic-input');
+  const handleAddSub = () => {
+    const val = newSubInput.value.trim();
+    if (val) {
+      addSubtopicToTopic(topic.id, val);
+      openTopicDetailModal(topicId, parentMonthId);
+    }
+  };
+  addSubBtn.onclick = handleAddSub;
+  newSubInput.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddSub();
+    }
+  };
+
+  // Back to Month
+  const backBtn = document.getElementById('btn-back-to-month');
+  if (backBtn && parentMonthId) {
+    backBtn.onclick = () => openMonthDetailModal(parentMonthId);
+  }
+
+  // Save changes
+  document.getElementById('btn-save-topic-modal').onclick = () => {
+    const updatedStatus = statusSelect.value;
+    const updatedProgress = parseInt(progressInput.value, 10);
+    const updatedNotes = notesArea.value;
+
+    updateRoadmapTopic(topic.id, {
+      status: updatedStatus,
+      progress: updatedProgress,
+      notes: updatedNotes,
+      completion_date: updatedStatus === 'Completed' ? (topic.completion_date || new Date().toISOString().split('T')[0]) : null
+    });
+
+    if (parentMonthId) {
+      openMonthDetailModal(parentMonthId);
+    } else {
+      closeModal();
+    }
+  };
+
+  document.getElementById('btn-close-modal').onclick = closeModal;
+  document.getElementById('btn-cancel-topic-modal').onclick = closeModal;
+  document.getElementById('modal-backdrop').onclick = (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  };
+}
+
+/**
+ * ==================================================
+ * PHASE 2: PRIME 3.0 TOPIC DETAIL MODAL
+ * ==================================================
+ */
+export function openPrimeTopicDetailModal(primeTopicId) {
+  initModalContainer();
+  const { primeTopics } = getRoadmapEntities();
+  const topic = primeTopics.find(p => p.id === primeTopicId);
+  if (!topic) return;
+
+  modalContainer.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal-dialog" style="max-width: 540px;">
+        <div class="modal-header" style="border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge badge-cyan">Track A: Prime 3.0 AI/ML</span>
+              <span class="badge badge-slate">${topic.category}</span>
+            </div>
+            <h2 class="modal-title" style="font-size: 1.25rem; margin-top: 4px;">${topic.name}</h2>
+          </div>
+          <button class="btn btn-ghost btn-icon" id="btn-close-modal">${ICONS.x}</button>
+        </div>
+
+        <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: var(--color-bg-base); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border-subtle);">
+            <div class="form-group" style="margin: 0;">
+              <label class="form-label" style="font-size: 0.75rem;">Status</label>
+              <select class="form-select" id="prime-topic-status">
+                <option value="Not Started" ${topic.status === 'Not Started' ? 'selected' : ''}>Not Started</option>
+                <option value="Learning" ${topic.status === 'Learning' ? 'selected' : ''}>Learning</option>
+                <option value="Practicing" ${topic.status === 'Practicing' ? 'selected' : ''}>Practicing</option>
+                <option value="Completed" ${topic.status === 'Completed' ? 'selected' : ''}>Completed</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin: 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label class="form-label" style="font-size: 0.75rem;">Progress</label>
+                <span style="font-family: var(--font-mono); font-weight: 700; color: var(--color-accent-cyan);" id="prime-progress-label">${topic.progress}%</span>
+              </div>
+              <input type="range" class="form-range" id="prime-topic-progress" min="0" max="100" value="${topic.progress}" style="width: 100%; accent-color: var(--color-accent-cyan);" />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.75rem;">
+            <div style="background: var(--color-bg-base); padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle);">
+              <div style="color: var(--color-text-muted);">Start Date</div>
+              <div style="font-weight: 600; font-family: var(--font-mono);">${topic.start_date || '2026-10-01'}</div>
+            </div>
+            <div style="background: var(--color-bg-base); padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle);">
+              <div style="color: var(--color-text-muted);">Target Date</div>
+              <div style="font-weight: 600; font-family: var(--font-mono);">${topic.target_date || 'Target Cohort'}</div>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" style="font-size: 0.75rem;">Notes & Cohort Code References</label>
+            <textarea class="form-textarea" id="prime-topic-notes" rows="3" placeholder="Key implementations, notebook links, and test metrics...">${topic.notes || ''}</textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="border-top: 1px solid var(--color-border); padding-top: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-prime-modal">Close</button>
+          <button type="button" class="btn btn-primary" id="btn-save-prime-modal">Save Prime Topic</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const pInput = document.getElementById('prime-topic-progress');
+  const pLabel = document.getElementById('prime-progress-label');
+  const pStatus = document.getElementById('prime-topic-status');
+  const pNotes = document.getElementById('prime-topic-notes');
+
+  pInput.oninput = (e) => {
+    pLabel.textContent = `${e.target.value}%`;
+    if (parseInt(e.target.value, 10) === 100) pStatus.value = 'Completed';
+    else if (parseInt(e.target.value, 10) > 0 && pStatus.value === 'Not Started') pStatus.value = 'Learning';
+  };
+
+  pStatus.onchange = (e) => {
+    if (e.target.value === 'Completed') {
+      pInput.value = 100;
+      pLabel.textContent = '100%';
+    } else if (e.target.value === 'Not Started') {
+      pInput.value = 0;
+      pLabel.textContent = '0%';
+    }
+  };
+
+  document.getElementById('btn-save-prime-modal').onclick = () => {
+    const updatedStatus = pStatus.value;
+    const updatedProgress = parseInt(pInput.value, 10);
+    const updatedNotes = pNotes.value;
+
+    updatePrimeTopic(topic.id, {
+      status: updatedStatus,
+      progress: updatedProgress,
+      notes: updatedNotes,
+      completion_date: updatedStatus === 'Completed' ? (topic.completion_date || new Date().toISOString().split('T')[0]) : null
+    });
+
+    closeModal();
+  };
+
+  document.getElementById('btn-close-modal').onclick = closeModal;
+  document.getElementById('btn-cancel-prime-modal').onclick = closeModal;
+  document.getElementById('modal-backdrop').onclick = (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  };
+}
+

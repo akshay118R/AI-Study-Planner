@@ -10,20 +10,32 @@ const LISTENERS = new Set();
 let currentState = null;
 
 export function initStorage() {
+  const initial = createInitialState();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      // Merge with default initial state to guarantee any missing keys exist
-      const initial = createInitialState();
-      currentState = deepMerge(initial, parsed);
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // Ensure Phase 2 entities exist even if migrating from earlier session
+        if (!parsed.roadmap_topics || !parsed.roadmap_topics.length) {
+          parsed.roadmap_year = initial.roadmap_year;
+          parsed.roadmap_months = initial.roadmap_months;
+          parsed.roadmap_topics = initial.roadmap_topics;
+          parsed.roadmap_subtopics = initial.roadmap_subtopics;
+          parsed.prime_topics = initial.prime_topics;
+          parsed.prime_modules = initial.prime_modules;
+        }
+        currentState = deepMerge(initial, parsed);
+      } else {
+        currentState = initial;
+        saveState();
+      }
     } else {
-      currentState = createInitialState();
-      saveState();
+      currentState = initial;
     }
   } catch (err) {
-    console.error('Failed to load from storage. Initializing fresh state:', err);
-    currentState = createInitialState();
+    console.error('Storage initialization issue, using initial state:', err);
+    currentState = initial;
   }
   return currentState;
 }
@@ -48,7 +60,9 @@ export function updateState(updater) {
 
 export function saveState() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+    }
   } catch (err) {
     console.error('Storage save error:', err);
   }

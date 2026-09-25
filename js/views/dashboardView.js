@@ -5,6 +5,7 @@ import { getState, updateState } from '../data/storage.js';
 import { calculateComprehensiveAnalytics } from '../services/analyticsService.js';
 import { calculateStreaks } from '../services/streakService.js';
 import { getMonthAndWeekInfo, generateDailyPlanForDate } from '../services/taskGenerator.js';
+import { getRoadmapAnalytics } from '../services/roadmapEngine.js';
 import { getIcon } from '../components/icons.js';
 import { openQuickActionModal, openAddTaskModal, openLogStudyModal, openAddDsaModal, openAddProjectModal } from '../components/modals.js';
 
@@ -32,6 +33,8 @@ export function renderDashboard(container) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : (hour < 18 ? 'Good afternoon' : 'Good evening');
 
+  const roadmapStats = getRoadmapAnalytics(state);
+
   container.innerHTML = `
     <!-- Top Career Target Header -->
     <div class="view-header">
@@ -49,6 +52,36 @@ export function renderDashboard(container) {
       </div>
     </div>
 
+    <!-- Section 22: CURRENT FOCUS BANNER -->
+    <div class="current-focus-card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-size: 0.72rem; font-family: var(--font-mono); font-weight: 700; color: var(--color-accent-emerald); text-transform: uppercase; letter-spacing: 0.08em;">
+            CURRENT FOCUS
+          </div>
+          <h2 style="font-size: 1.35rem; font-weight: 800; margin: 4px 0 2px; color: #FFFFFF;">
+            ${roadmapStats.currentMonth.month} ${roadmapStats.currentMonth.year}
+          </h2>
+          <div style="font-size: 0.92rem; color: var(--color-text-secondary); font-weight: 500;">
+            ${roadmapStats.currentMonth.title}
+          </div>
+          <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 0.82rem; font-family: var(--font-mono); flex-wrap: wrap;">
+            <span style="color: var(--color-primary); font-weight: 700;">Prime 3.0: ${roadmapStats.prime.percentage}%</span>
+            <span style="color: var(--color-text-muted);">·</span>
+            <span style="color: var(--color-accent-emerald); font-weight: 700;">Individual: ${roadmapStats.individual.percentage}%</span>
+            <span style="color: var(--color-text-muted);">·</span>
+            <span style="color: var(--color-accent-cyan);">Month Progress: ${roadmapStats.currentMonth.progress}%</span>
+          </div>
+        </div>
+
+        <div>
+          <button class="btn btn-primary" id="btn-open-roadmap-focus" style="margin-top: 4px;">
+            ${getIcon('roadmap')} <span>[Open Roadmap]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 4 High-Level Track Overview Cards -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-md); margin-bottom: var(--space-lg);">
       <!-- Track A: Prime 3.0 -->
@@ -57,12 +90,12 @@ export function renderDashboard(container) {
           <span>TRACK A: PRIME 3.0 AI/ML</span>
           ${getIcon('prime', 'text-primary')}
         </div>
-        <div class="stat-value text-primary">${analytics.prime.percentage}%</div>
+        <div class="stat-value text-primary">${roadmapStats.prime.percentage}%</div>
         <div class="progress-bar-wrap" style="margin: 6px 0;">
-          <div class="progress-bar-fill" style="width: ${analytics.prime.percentage}%;"></div>
+          <div class="progress-bar-fill" style="width: ${roadmapStats.prime.percentage}%;"></div>
         </div>
         <div class="stat-subtext">
-          <span>${analytics.prime.understood + analytics.prime.applied + analytics.prime.mastered} / ${analytics.prime.totalLessons} lessons mastered/applied</span>
+          <span>${roadmapStats.prime.completedTopics} / ${roadmapStats.prime.totalTopics} topics completed · ${roadmapStats.prime.learningTopics} learning</span>
         </div>
       </div>
 
@@ -72,12 +105,12 @@ export function renderDashboard(container) {
           <span>TRACK B: INDIVIDUAL CS</span>
           ${getIcon('roadmap', 'text-emerald')}
         </div>
-        <div class="stat-value text-emerald">${analytics.roadmap.percentage}%</div>
+        <div class="stat-value text-emerald">${roadmapStats.individual.percentage}%</div>
         <div class="progress-bar-wrap" style="margin: 6px 0;">
-          <div class="progress-bar-fill emerald" style="width: ${analytics.roadmap.percentage}%;"></div>
+          <div class="progress-bar-fill emerald" style="width: ${roadmapStats.individual.percentage}%;"></div>
         </div>
         <div class="stat-subtext">
-          <span>${info.roadmapMonth.name}: ${info.roadmapMonth.title}</span>
+          <span>${roadmapStats.currentMonth.month}: ${roadmapStats.currentMonth.title}</span>
         </div>
       </div>
 
@@ -251,6 +284,8 @@ export function renderDashboard(container) {
 
   // Attach event handlers
   document.getElementById('btn-quick-action').onclick = openQuickActionModal;
+  const focusBtn = document.getElementById('btn-open-roadmap-focus');
+  if (focusBtn) focusBtn.onclick = () => { window.location.hash = '#roadmap'; };
   document.getElementById('card-nav-prime').onclick = () => { window.location.hash = '#prime'; };
   document.getElementById('card-nav-roadmap').onclick = () => { window.location.hash = '#roadmap'; };
   document.getElementById('card-nav-dsa').onclick = () => { window.location.hash = '#dsa'; };
