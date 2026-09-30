@@ -1,13 +1,77 @@
 {
-  "name": "akshay-career-os",
-  "version": "1.0.0",
-  "description": "Akshay's 12-Month Personal AI/ML Career Learning & Habit Tracker OS (Oct 2026 - Sep 2027)",
-  "main": "server.js",
+  "name": "career-tracker",
+  "productName": "Career Tracker",
+  "version": "1.0.1",
+  "description": "Career Tracker - Simple Personal Study & Habit Tracking OS (Month → Week → Today)",
+  "main": "electron/main.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "electron": "electron .",
+    "electron:dev": "electron .",
+    "pack": "electron-builder --win --dir",
+    "build": "electron-builder --win",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.akshay.careertracker",
+    "productName": "Career Tracker",
+    "copyright": "Copyright © 2026 Akshay",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "css/**/*",
+      "js/**/*",
+      "index.html",
+      "electron/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Career Tracker",
+      "uninstallDisplayName": "Career Tracker",
+      "runAfterFinish": true,
+      "artifactName": "CareerTracker-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "CareerTracker.${ext}"
+    }
   },
   "author": "Akshay",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "png-to-ico": "^3.0.2"
+  }
 }

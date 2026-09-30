@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Career Tracker</string>
+    <string name="no_internet_title">No Internet Connection</string>
+    <string name="no_internet_desc">Unable to reach the Career Tracker application. Please check your network connection and retry.</string>
+    <string name="retry_button">Retry Connection</string>
+    <string name="loading_message">Loading Career Tracker…</string>
+</resources>

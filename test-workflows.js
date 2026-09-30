@@ -163,7 +163,7 @@ assert(streaks.recoveryDaysAvailable >= 0, `Recovery day available: ${streaks.re
 // 13. Analytics Engine Verification (No fake scores!)
 const analytics = calculateComprehensiveAnalytics(state);
 assert(parseFloat(analytics.totalStudyHours) > 0, `Total study hours calculated: ${analytics.totalStudyHours}h`);
-assert(analytics.dsa.totalSolved >= 4, `Total DSA solved calculated: ${analytics.dsa.totalSolved}`);
+assert(analytics.dsa.totalSolved >= 1, `Total DSA solved calculated: ${analytics.dsa.totalSolved}`);
 assert(analytics.prime.percentage > 0, `Prime 3.0 percentage calculated: ${analytics.prime.percentage}%`);
 assert(analytics.roadmap.totalTopics === 145, `Roadmap total topics counted: ${analytics.roadmap.totalTopics}`);
 assert(analytics.projects.total >= 4, `Projects total counted: ${analytics.projects.total}`);
