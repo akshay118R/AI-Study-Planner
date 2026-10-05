@@ -32,7 +32,8 @@ Thumbs.db
 *.bin
 *.safetensors
 *.onnx
-models/
+/models/
+!js/models/
 *.sqlite
 *.db
 
