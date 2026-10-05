@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/cover.png" alt="AI Study Planner Cover" width="100%">
+</p>
+
 # AI Study Planner
 
 > **A 100% local-first, privacy-preserving study and productivity tracker that transforms ambitious learning goals into structured Monthly Themes, Weekly Objectives, and Daily Actionable Tasks powered by a local Gemma model running in Ollama.**
