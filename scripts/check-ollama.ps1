@@ -7,7 +7,7 @@
 $ErrorActionPreference = "Stop"
 
 $OllamaBaseUrl = if ($env:OLLAMA_BASE_URL) { $env:OLLAMA_BASE_URL } else { "http://127.0.0.1:11434" }
-$RequiredModel = if ($env:OLLAMA_MODEL) { $env:OLLAMA_MODEL } else { "gemma4:e2b" }
+$RequiredModel = if ($env:OLLAMA_MODEL) { $env:OLLAMA_MODEL } else { "gemma4:2b" }
 
 Write-Host "====================================================" -ForegroundColor Cyan
 Write-Host "   HACKTOBERFEST TRACKER - LOCAL AI DIAGNOSTICS     " -ForegroundColor Cyan
@@ -60,8 +60,8 @@ if ($found) {
     Write-Host "`n====================================================" -ForegroundColor Cyan
     Write-Host "  STATUS: LOCAL AI IS READY TO USE!                 " -ForegroundColor Green
     Write-Host "====================================================" -ForegroundColor Cyan
-    Write-Host "  Run: npm start" -ForegroundColor White
-    Write-Host "  Open: http://localhost:3000/#create-plan`n" -ForegroundColor White
+    Write-Host "  GitHub Pages: https://akshay118r.github.io/AI-Study-Planner/" -ForegroundColor White
+    Write-Host "  Local dev   : npm start -> http://localhost:3000/#create-plan`n" -ForegroundColor White
     exit 0
 } else {
     Write-Host "  [WARN] Model '$RequiredModel' is missing in Ollama." -ForegroundColor Yellow

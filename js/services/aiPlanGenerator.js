@@ -9,6 +9,7 @@ import { validateAndRepairPlan } from './planValidator.js';
 import { formatDateStr, shiftDate, parseDate } from './dateService.js';
 import { getState } from '../data/storage.js';
 import { GEMMA_SYSTEM_INSTRUCTION, getGemmaSystemInstruction } from './gemmaSystemPrompt.js';
+import { repairAndParseJson } from './jsonRepair.js';
 
 export { GEMMA_SYSTEM_INSTRUCTION, getGemmaSystemInstruction };
 
@@ -57,7 +58,7 @@ export async function checkAiStatus(forceRefresh = false) {
     // Relative fetch without base URL or server not running
   }
 
-  // 2. Direct check to local Ollama instance (fallback for Electron / loopback / tests)
+  // 2. Direct check to local Ollama instance (essential for GitHub Pages and localhost)
   try {
     const directRes = await fetch(`${OLLAMA_CONFIG.defaultBaseUrl}/api/tags`, {
       signal: AbortSignal.timeout(3000)
@@ -70,7 +71,8 @@ export async function checkAiStatus(forceRefresh = false) {
           baseUrl: data.baseUrl || OLLAMA_CONFIG.defaultBaseUrl,
           model: data.model || OLLAMA_CONFIG.defaultModel,
           installedModels: data.installedModels || [OLLAMA_CONFIG.defaultModel],
-          installCommand: `ollama pull ${OLLAMA_CONFIG.defaultModel}`
+          installCommand: `ollama pull ${OLLAMA_CONFIG.defaultModel}`,
+          message: 'Local Gemma model detected and ready.'
         };
         lastStatusCheck = now;
         return cachedAiStatus;
@@ -81,7 +83,7 @@ export async function checkAiStatus(forceRefresh = false) {
       const targetPrefix = target.split(':')[0];
       const hasModel = rawModels.some(m => {
         const name = (typeof m === 'string' ? m : (m.name || m.model || '')).toLowerCase();
-        return name === target || name.startsWith(targetPrefix + ':') || name === targetPrefix;
+        return name === target || name === `${target}:latest` || name.startsWith(targetPrefix + ':') || name === targetPrefix;
       });
 
       cachedAiStatus = {
@@ -89,18 +91,52 @@ export async function checkAiStatus(forceRefresh = false) {
         baseUrl: OLLAMA_CONFIG.defaultBaseUrl,
         model: OLLAMA_CONFIG.defaultModel,
         installedModels: rawModels.map(m => typeof m === 'string' ? m : (m.name || m.model)),
-        installCommand: `ollama pull ${OLLAMA_CONFIG.defaultModel}`
+        installCommand: `ollama pull ${OLLAMA_CONFIG.defaultModel}`,
+        message: hasModel ? 'Local Gemma model detected and ready.' : 'Gemma model not found.',
+        error: hasModel ? null : `Gemma model not found. Run: ollama pull ${OLLAMA_CONFIG.defaultModel}`
       };
       lastStatusCheck = now;
       return cachedAiStatus;
     }
-  } catch (directErr) {}
+  } catch (directErr) {
+    // Direct fetch failed. Check whether Ollama is running but connection is blocked by CORS/Origin permission
+    let isRunningProbe = false;
+    try {
+      const probe = await fetch(`${OLLAMA_CONFIG.defaultBaseUrl}/`, {
+        mode: 'no-cors',
+        signal: AbortSignal.timeout(1500)
+      });
+      if (probe) {
+        isRunningProbe = true;
+      }
+    } catch (probeErr) {
+      // Connection refused or network error
+    }
+
+    if (isRunningProbe) {
+      cachedAiStatus = {
+        status: 'blocked',
+        code: 'CONNECTION_BLOCKED',
+        title: 'Connection Blocked',
+        baseUrl: OLLAMA_CONFIG.defaultBaseUrl,
+        model: OLLAMA_CONFIG.defaultModel,
+        allowedOrigin: OLLAMA_CONFIG.githubPagesOrigin,
+        error: `Ollama is running, but this website is not allowed to access it yet. Add ${OLLAMA_CONFIG.githubPagesOrigin} to Ollama's allowed origins and restart Ollama.`,
+        message: `Ollama is running, but this website is not allowed to access it yet. Add ${OLLAMA_CONFIG.githubPagesOrigin} to Ollama's allowed origins and restart Ollama.`
+      };
+      lastStatusCheck = now;
+      return cachedAiStatus;
+    }
+  }
 
   cachedAiStatus = {
     status: 'offline',
+    code: 'OLLAMA_OFFLINE',
+    title: 'Ollama Offline',
     baseUrl: OLLAMA_CONFIG.defaultBaseUrl,
     model: OLLAMA_CONFIG.defaultModel,
-    error: 'Ollama is not responding. Please ensure Ollama is started.'
+    error: 'Ollama is not responding. Please ensure Ollama is started.',
+    message: 'Start Ollama on your computer at http://127.0.0.1:11434 (Run: ollama serve).'
   };
   lastStatusCheck = now;
   return cachedAiStatus;
@@ -175,6 +211,24 @@ export async function generateAiPlan(userGoalData, onProgress = () => {}) {
         err.code = 'OLLAMA_OFFLINE';
         throw err;
       }
+    } else if (aiStatus.status === 'blocked') {
+      if (userGoalData.allowOfflineDemo) {
+        onProgress('Creating your plan....', 'Connection blocked. Generating plan via local deterministic engine...');
+        await new Promise(r => setTimeout(r, 600));
+        rawGeneratedPlan = generateLocalStructuredPlan({
+          goal,
+          startDate,
+          targetDate,
+          dailyHours,
+          daysPerWeek,
+          experienceLevel
+        });
+      } else {
+        const err = new Error(aiStatus.error || `Ollama is running, but this website is not allowed to access it yet. Add ${OLLAMA_CONFIG.githubPagesOrigin} to Ollama's allowed origins and restart Ollama.`);
+        err.code = 'CONNECTION_BLOCKED';
+        err.allowedOrigin = OLLAMA_CONFIG.githubPagesOrigin;
+        throw err;
+      }
     } else if (aiStatus.status === 'model_missing') {
       if (userGoalData.allowOfflineDemo) {
         onProgress('Creating your plan....', 'Model missing. Generating plan via local deterministic engine...');
@@ -188,7 +242,7 @@ export async function generateAiPlan(userGoalData, onProgress = () => {}) {
           experienceLevel
         });
       } else {
-        const err = new Error(`Required model '${aiStatus.model || OLLAMA_CONFIG.defaultModel}' is not installed in Ollama. Run: ${aiStatus.installCommand || 'ollama pull ' + OLLAMA_CONFIG.defaultModel}`);
+        const err = new Error(`Gemma model not found. Run: ${aiStatus.installCommand || 'ollama pull ' + OLLAMA_CONFIG.defaultModel}`);
         err.code = 'MODEL_MISSING';
         err.installCommand = aiStatus.installCommand || `ollama pull ${OLLAMA_CONFIG.defaultModel}`;
         throw err;
@@ -364,6 +418,58 @@ async function callLocalOllamaPlanProxy(params, onProgress) {
   );
 
   try {
+    let rawContent = null;
+
+    // 1. Direct call to local Ollama (primary for GitHub Pages and localhost)
+    try {
+      const directChatRes = await fetch(`${OLLAMA_CONFIG.defaultBaseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: OLLAMA_CONFIG.defaultModel,
+          messages: [
+            {
+              role: 'system',
+              content: GEMMA_SYSTEM_INSTRUCTION
+            },
+            {
+              role: 'user',
+              content: promptText
+            }
+          ],
+          stream: false,
+          format: 'json',
+          options: {
+            temperature: OLLAMA_CONFIG.temperature || 0.2,
+            num_ctx: OLLAMA_CONFIG.contextWindow || 8192,
+            num_predict: 8192
+          }
+        }),
+        signal: params.signal
+      });
+
+      if (directChatRes.ok) {
+        const chatData = await directChatRes.json();
+        if (chatData && chatData.plan) {
+          return chatData.plan;
+        }
+        rawContent = chatData.message?.content || null;
+      }
+    } catch (directErr) {
+      if (directErr.name === 'AbortError') throw directErr;
+      // Direct call failed or unavailable, fallback to backend proxy endpoint
+    }
+
+    if (rawContent) {
+      try {
+        return repairAndParseJson(rawContent);
+      } catch (parseErr) {
+        console.warn('[Ollama Plan] Direct parse failed, falling back to deterministic plan:', parseErr.message);
+        return generateLocalStructuredPlan(params);
+      }
+    }
+
+    // 2. Fallback to /api/generate-plan (when running server.js or in tests with mocked proxy)
     const res = await fetch('/api/generate-plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

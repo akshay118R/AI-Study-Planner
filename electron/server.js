@@ -52,7 +52,7 @@ export function startEmbeddedServer(baseDir) {
   } catch (e) {}
 
   const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-  const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
+  const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:2b';
   const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 180000;
   const OLLAMA_TEMPERATURE = Number(process.env.OLLAMA_TEMPERATURE) || 0.2;
 
@@ -91,7 +91,7 @@ export function startEmbeddedServer(baseDir) {
           model: OLLAMA_MODEL,
           installedModels: models.map(m => m.name),
           installCommand: `ollama pull ${OLLAMA_MODEL}`,
-          error: `Model '${OLLAMA_MODEL}' is missing in Ollama. Run: ollama pull ${OLLAMA_MODEL}`
+          error: `Gemma model not found. Run: ollama pull ${OLLAMA_MODEL}`
         };
       }
     } catch (err) {
@@ -106,6 +106,20 @@ export function startEmbeddedServer(baseDir) {
 
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
+      // CORS support for GitHub Pages and localhost
+      const origin = req.headers.origin;
+      if (origin && (origin === 'https://akshay118r.github.io' || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'))) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      }
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       // Local AI readiness & status endpoint
       if (req.method === 'GET' && (req.url === '/api/config' || req.url === '/api/ai/status')) {
         const status = await checkOllamaHealth();

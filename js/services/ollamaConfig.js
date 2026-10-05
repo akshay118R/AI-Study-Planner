@@ -8,10 +8,13 @@ export const OLLAMA_CONFIG = {
   defaultBaseUrl: 'http://127.0.0.1:11434',
 
   // Required Gemma model tag
-  defaultModel: 'gemma4:e2b',
+  defaultModel: 'gemma4:2b',
+
+  // Supported GitHub Pages origin for CORS configuration
+  githubPagesOrigin: 'https://akshay118r.github.io',
 
   // Fallback acceptable model aliases if user has a similar gemma installed
-  compatibleModelPrefixes: ['gemma4:e2b', 'gemma4', 'gemma:2b', 'gemma2:2b', 'gemma2:9b'],
+  compatibleModelPrefixes: ['gemma4:2b', 'gemma4:e2b', 'gemma4', 'gemma:2b', 'gemma2:2b', 'gemma2:9b'],
 
   // Connection and health check timeout (5 seconds)
   healthTimeoutMs: 5000,

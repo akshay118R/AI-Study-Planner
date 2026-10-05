@@ -197,13 +197,20 @@ export function renderSettings(container) {
     const status = await checkAiStatus(force);
     if (status.status === 'ready') {
       badgeAi.className = 'badge badge-emerald';
-      badgeAi.textContent = `● Ready (${status.model || OLLAMA_CONFIG.defaultModel})`;
+      badgeAi.textContent = `● OLLAMA ONLINE (${status.model || OLLAMA_CONFIG.defaultModel})`;
+      badgeAi.title = 'Ollama server reachable. Required Gemma model detected.';
+    } else if (status.status === 'blocked') {
+      badgeAi.className = 'badge badge-amber';
+      badgeAi.textContent = '🚫 CONNECTION BLOCKED';
+      badgeAi.title = `Ollama is running, but this website is not allowed to access it yet. Add ${OLLAMA_CONFIG.githubPagesOrigin} to Ollama's allowed origins and restart Ollama.`;
     } else if (status.status === 'model_missing') {
       badgeAi.className = 'badge badge-amber';
-      badgeAi.textContent = '⚠️ Model Missing';
+      badgeAi.textContent = '⚠️ MODEL NOT FOUND';
+      badgeAi.title = `Gemma model not found. Run: ${status.installCommand || 'ollama pull ' + OLLAMA_CONFIG.defaultModel}`;
     } else {
       badgeAi.className = 'badge badge-rose';
-      badgeAi.textContent = '● Ollama Offline';
+      badgeAi.textContent = '● OLLAMA OFFLINE';
+      badgeAi.title = 'Ollama server cannot be reached. Please ensure Ollama is started on your computer.';
     }
   }
 

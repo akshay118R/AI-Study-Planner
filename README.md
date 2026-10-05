@@ -71,7 +71,7 @@ Traditional task management apps and to-do lists suffer from major shortcomings 
 
 ## 3. Main Features
 
-- 🧠 **Local AI Curriculum Generation**: Translates free-form goals into structured learning roadmaps using Google's `gemma4:e2b` running locally via Ollama.
+- 🧠 **Local AI Curriculum Generation**: Translates free-form goals into structured learning roadmaps using Google's `gemma4:2b` running locally via Ollama.
 - 📅 **Strict Data Hierarchy**: Organizes learning into a coherent progression:
   - **Month**: Overarching thematic milestones and skill targets.
   - **Week**: Focused learning objectives with target hour allocations.
@@ -105,7 +105,7 @@ The application enforces a strict separation of concerns between non-determinist
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                        LOCAL OLLAMA                         │
-│  Runs local model: gemma4:e2b (num_ctx: 16384)              │
+│  Runs local model: gemma4:2b (num_ctx: 16384)               │
 └──────────────────────────────┬──────────────────────────────┘
                                │ Raw JSON response
                                ▼
@@ -154,7 +154,7 @@ The application enforces a strict separation of concerns between non-determinist
 - **Styling**: Pure Vanilla CSS using custom design tokens, CSS variables, and fluid responsive layouts (no Tailwind, zero heavy CSS bloat).
 - **Desktop Runtime**: [Electron](https://www.electronjs.org/) (cross-platform desktop integration with window-state persistence).
 - **Local Server**: Node.js built-in `http` module (loopback-only binding to `127.0.0.1`).
-- **AI Engine**: [Ollama](https://ollama.com/) running **`gemma4:e2b`** locally.
+- **AI Engine**: [Ollama](https://ollama.com/) running **`gemma4:2b`** locally.
 - **Testing**: Node.js built-in `assert` test runner (38 automated unit and integration tests).
 - **Packaging**: `electron-builder` for desktop packaging.
 
@@ -173,10 +173,17 @@ The project was developed with a **local-first, zero-cloud-dependency** philosop
 
 ## 7. Local AI Setup
 
-### Step 1: Install Ollama
+The application is built to run 100% locally and privately:
+- **GitHub Pages Frontend**: The deployed site at **[https://akshay118r.github.io/AI-Study-Planner/](https://akshay118r.github.io/AI-Study-Planner/)** hosts the static frontend only.
+- **Local Ollama & Gemma**: Ollama and the Gemma model run locally on your own computer.
+- **Loopback Connection**: The GitHub Pages frontend connects directly to your local Ollama instance at `http://127.0.0.1:11434`.
+- **Zero Cloud AI**: Once Ollama and the model are installed, no internet connection or cloud API key is required. All study goals and schedules stay on your device.
+
+Follow these steps to set up local AI on Windows (or macOS / Linux):
+
+### 1. Install Ollama
 
 Download and install Ollama for your operating system:
-
 - **Windows**: Download installer from [ollama.com/download/windows](https://ollama.com/download/windows)
 - **macOS**: Download from [ollama.com/download/mac](https://ollama.com/download/mac) or install via Homebrew:
   ```bash
@@ -187,51 +194,67 @@ Download and install Ollama for your operating system:
   curl -fsSL https://ollama.com/install.sh | sh
   ```
 
-Ensure Ollama is running in the background (or run `ollama serve` in a terminal).
+### 2. Install Gemma
 
-### Step 2: Install the Required Gemma Model
-
-Pull the configured Gemma model (`gemma4:e2b`):
+Open your terminal or PowerShell and pull the configured Gemma model (`gemma4:2b`):
 
 ```bash
-ollama pull gemma4:e2b
+ollama pull gemma4:2b
 ```
 
-### Step 3: Verify Ollama Setup
+### 3. Allow GitHub Pages Origin (and Localhost)
 
-Verify that Ollama and the model are installed and responding:
+By default, Ollama only permits cross-origin requests from `localhost` and `127.0.0.1`. To allow the GitHub Pages frontend (`https://akshay118r.github.io`) to connect to your local Ollama instance without being blocked by browser CORS restrictions, configure `OLLAMA_ORIGINS`.
 
+**On Windows (PowerShell):**
+Run this command in PowerShell to set the user environment variable:
+
+```powershell
+[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', 'https://akshay118r.github.io', 'User')
+```
+
+*(Note: Localhost development origins `http://localhost:*` and `http://127.0.0.1:*` remain supported.)*
+
+**On macOS (Terminal):**
 ```bash
-# Using the built-in diagnostic script
+launchctl setenv OLLAMA_ORIGINS "https://akshay118r.github.io"
+```
+
+**On Linux (systemd service):**
+Add `Environment="OLLAMA_ORIGINS=https://akshay118r.github.io"` via `sudo systemctl edit ollama.service` and run `sudo systemctl daemon-reload && sudo systemctl restart ollama`.
+
+### 4. Restart Ollama
+
+Environment variable changes only take effect after restarting Ollama:
+1. Quit Ollama completely from the **Windows system tray** (right-click the Ollama llama icon in the taskbar corner and click **Quit**).
+2. Start Ollama again from the Start Menu or run `ollama serve` in your terminal.
+
+### 5. Open and Verify
+
+You can use the application from either environment:
+
+**A) GitHub Pages:**
+1. Open **[https://akshay118r.github.io/AI-Study-Planner/](https://akshay118r.github.io/AI-Study-Planner/)** in your browser.
+2. Click **"Check Status"** (or **"Check Ollama"**).
+3. The indicator turns green and displays:
+   ```
+   OLLAMA ONLINE (gemma4:2b)
+   Ollama server reachable. Required Gemma model detected. 100% private offline generation.
+   ```
+4. Enter your goal and click **"Generate Plan"** to generate your structured roadmap.
+
+**B) Localhost (Local Development Server):**
+1. Run `npm start` in your project folder.
+2. Open **[http://localhost:3000/#create-plan](http://localhost:3000/#create-plan)**.
+3. Verify status check shows **OLLAMA ONLINE (gemma4:2b)**.
+
+To verify setup via command line diagnostics at any time:
+```bash
 npm run check:ai
 ```
-
-*(On Windows PowerShell, you can alternatively run: `.\scripts\check-ollama.ps1`)*
-
-If verified, the command will display:
-```
-===================================================
-  Ollama Local AI Diagnostics
-===================================================
-  Ollama URL     : http://127.0.0.1:11434
-  Required Model : gemma4:e2b
-  Status         : READY (100% Local Inference Available)
-===================================================
-```
-
-### Step 4: Run the Application
-
-Start the local development server:
-
-```bash
-# Start local HTTP server on port 3000
-npm start
-```
-
-Visit **[http://localhost:3000](http://localhost:3000)** in your browser.
+*(On Windows PowerShell, you can alternatively run: `powershell -File .\scripts\check-ollama.ps1`)*
 
 To launch as a native desktop application:
-
 ```bash
 npm run electron
 ```
@@ -361,7 +384,7 @@ cp .env.example .env
 |---|---|---|
 | `PORT` | `3000` | Port for the local web server |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | URL of the local Ollama instance |
-| `OLLAMA_MODEL` | `gemma4:e2b` | Gemma model tag installed in Ollama |
+| `OLLAMA_MODEL` | `gemma4:2b` | Gemma model tag installed in Ollama |
 | `OLLAMA_TIMEOUT_MS` | `180000` | Generation timeout in milliseconds (3 minutes) |
 | `OLLAMA_TEMPERATURE`| `0.2` | Sampling temperature (lower = more deterministic) |
 
@@ -374,7 +397,7 @@ cp .env.example .env
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (version 18 or higher recommended)
 - [npm](https://www.npmjs.com/) (version 9 or higher)
-- [Ollama](https://ollama.com/) with model `gemma4:e2b`
+- [Ollama](https://ollama.com/) with model `gemma4:2b`
 
 ### Setup Steps
 ```bash

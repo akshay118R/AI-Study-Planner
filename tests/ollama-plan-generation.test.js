@@ -41,7 +41,7 @@ export async function runOllamaPlanGenerationTests() {
     // ----------------------------------------------------
     {
       global.fetch = async (url) => {
-        if (url.includes('/api/ai/status') || url.includes('/api/tags')) {
+        if (url.includes('/api/ai/status') || url.includes('11434')) {
           throw new Error('connect ECONNREFUSED 127.0.0.1:11434');
         }
         return originalFetch(url);
@@ -73,9 +73,9 @@ export async function runOllamaPlanGenerationTests() {
             json: async () => ({
               status: 'model_missing',
               baseUrl: 'http://127.0.0.1:11434',
-              model: 'gemma4:e2b',
+              model: OLLAMA_CONFIG.defaultModel,
               installedModels: ['llama3:latest', 'mistral:latest'],
-              installCommand: 'ollama pull gemma4:e2b'
+              installCommand: `ollama pull ${OLLAMA_CONFIG.defaultModel}`
             })
           };
         }
@@ -84,16 +84,49 @@ export async function runOllamaPlanGenerationTests() {
 
       const status = await checkAiStatus(true);
       assert.strictEqual(status.status, 'model_missing', 'Must report model_missing when model is not installed');
-      assert.strictEqual(status.installCommand, 'ollama pull gemma4:e2b');
+      assert.strictEqual(status.installCommand, `ollama pull ${OLLAMA_CONFIG.defaultModel}`);
 
       await assert.rejects(
         async () => {
           await generateAiPlan({ goal: 'Learn Rust in 3 months' });
         },
-        (err) => err.code === 'MODEL_MISSING' && err.installCommand.includes('gemma4:e2b'),
-        'Must reject with MODEL_MISSING code and command to pull gemma4:e2b'
+        (err) => err.code === 'MODEL_MISSING' && err.installCommand.includes(OLLAMA_CONFIG.defaultModel),
+        `Must reject with MODEL_MISSING code and command to pull ${OLLAMA_CONFIG.defaultModel}`
       );
       console.log('✓ Missing Gemma model detected with exact pull command');
+    }
+
+    // ----------------------------------------------------
+    // Test 2b: Ollama is running but Origin is blocked (CORS / Connection Blocked)
+    // ----------------------------------------------------
+    {
+      global.fetch = async (url, opts) => {
+        if (url.includes('/api/ai/status')) {
+          throw new Error('404 Not Found');
+        }
+        if (url.includes('/api/tags')) {
+          throw new TypeError('Failed to fetch'); // CORS block
+        }
+        if (opts?.mode === 'no-cors') {
+          // Probe succeeds because Ollama server is running on the port
+          return { type: 'opaque', status: 0, ok: false };
+        }
+        return originalFetch(url, opts);
+      };
+
+      const status = await checkAiStatus(true);
+      assert.strictEqual(status.status, 'blocked', 'Must report blocked when CORS blocks request but Ollama responds to probe');
+      assert.strictEqual(status.code, 'CONNECTION_BLOCKED');
+      assert.ok(status.error.includes(OLLAMA_CONFIG.githubPagesOrigin), 'Must explain GitHub Pages origin configuration');
+
+      await assert.rejects(
+        async () => {
+          await generateAiPlan({ goal: 'Learn Rust in 3 months' });
+        },
+        (err) => err.code === 'CONNECTION_BLOCKED' && err.message.includes(OLLAMA_CONFIG.githubPagesOrigin),
+        'Must reject with CONNECTION_BLOCKED code and explanation to allow GitHub Pages origin'
+      );
+      console.log('✓ Blocked CORS origin detected with actionable OLLAMA_ORIGINS explanation');
     }
 
     // ----------------------------------------------------
@@ -108,8 +141,8 @@ export async function runOllamaPlanGenerationTests() {
             json: async () => ({
               status: 'ready',
               baseUrl: 'http://127.0.0.1:11434',
-              model: 'gemma4:e2b',
-              installedModels: ['gemma4:e2b']
+              model: OLLAMA_CONFIG.defaultModel,
+              installedModels: [OLLAMA_CONFIG.defaultModel]
             })
           };
         }
@@ -117,8 +150,8 @@ export async function runOllamaPlanGenerationTests() {
       };
 
       const status = await checkAiStatus(true);
-      assert.strictEqual(status.status, 'ready', 'Must report ready when gemma4:e2b is installed');
-      assert.strictEqual(status.model, 'gemma4:e2b');
+      assert.strictEqual(status.status, 'ready', 'Must report ready when configured model is installed');
+      assert.strictEqual(status.model, OLLAMA_CONFIG.defaultModel);
       console.log('✓ Configured Gemma model readiness confirmed');
     }
 
@@ -154,16 +187,16 @@ export async function runOllamaPlanGenerationTests() {
 
       global.fetch = async (url, opts) => {
         if (url.includes('/api/ai/status')) {
-          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: 'gemma4:e2b' }) };
+          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: OLLAMA_CONFIG.defaultModel }) };
         }
-        if (url.includes('/api/generate-plan')) {
+        if (url.includes('/api/generate-plan') || url.includes('/api/chat')) {
           return {
             ok: true,
             status: 200,
             json: async () => ({
               success: true,
               plan: mockValidPlan,
-              model: 'gemma4:e2b'
+              model: OLLAMA_CONFIG.defaultModel
             })
           };
         }
@@ -191,9 +224,9 @@ export async function runOllamaPlanGenerationTests() {
     {
       global.fetch = async (url, opts) => {
         if (url.includes('/api/ai/status')) {
-          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: 'gemma4:e2b' }) };
+          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: OLLAMA_CONFIG.defaultModel }) };
         }
-        if (url.includes('/api/generate-plan')) {
+        if (url.includes('/api/generate-plan') || url.includes('/api/chat')) {
           return {
             ok: false,
             status: 502,
@@ -219,9 +252,9 @@ export async function runOllamaPlanGenerationTests() {
     {
       global.fetch = async (url, opts) => {
         if (url.includes('/api/ai/status')) {
-          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: 'gemma4:e2b' }) };
+          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: OLLAMA_CONFIG.defaultModel }) };
         }
-        if (url.includes('/api/generate-plan')) {
+        if (url.includes('/api/generate-plan') || url.includes('/api/chat')) {
           return {
             ok: false,
             status: 504,
@@ -250,9 +283,9 @@ export async function runOllamaPlanGenerationTests() {
     {
       global.fetch = async (url, opts) => {
         if (url.includes('/api/ai/status')) {
-          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: 'gemma4:e2b' }) };
+          return { ok: true, status: 200, json: async () => ({ status: 'ready', model: OLLAMA_CONFIG.defaultModel }) };
         }
-        if (url.includes('/api/generate-plan')) {
+        if (url.includes('/api/generate-plan') || url.includes('/api/chat')) {
           return new Promise((resolve, reject) => {
             const timer = setTimeout(() => resolve({ ok: true, json: async () => ({ plan: {} }) }), 5000);
             if (opts?.signal) {

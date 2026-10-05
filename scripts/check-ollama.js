@@ -6,7 +6,8 @@
  */
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-const REQUIRED_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
+const REQUIRED_MODEL = process.env.OLLAMA_MODEL || 'gemma4:2b';
+const GH_PAGES_ORIGIN = 'https://akshay118r.github.io';
 
 console.log('====================================================');
 console.log('   HACKTOBERFEST TRACKER - LOCAL AI DIAGNOSTICS     ');
@@ -51,8 +52,8 @@ async function runDiagnostics() {
     console.log('\n====================================================');
     console.log('  STATUS: LOCAL AI IS 100% READY!                   ');
     console.log('====================================================');
-    console.log(`  Start the app: npm start`);
-    console.log(`  Open in browser: http://localhost:3000/#create-plan\n`);
+    console.log(`  GitHub Pages: https://akshay118r.github.io/AI-Study-Planner/`);
+    console.log(`  Local dev   : npm start -> http://localhost:3000/#create-plan\n`);
     process.exit(0);
   } else {
     console.warn(`  ⚠️ Required model '${REQUIRED_MODEL}' is NOT installed in Ollama.`);

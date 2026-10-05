@@ -11,6 +11,7 @@ import {
   cancelPlanGeneration,
   checkAiStatus
 } from '../services/aiPlanGenerator.js';
+import { OLLAMA_CONFIG } from '../services/ollamaConfig.js';
 import {
   savePlanDraft,
   getPlanDraft,
@@ -281,19 +282,25 @@ function renderGoalInputScreen(container) {
     if (status.status === 'ready') {
       indicator.style.background = '#10b981';
       indicator.style.boxShadow = '0 0 8px rgba(16, 185, 129, 0.4)';
-      title.textContent = `Ollama Ready (${status.model || 'gemma4:e2b'})`;
-      desc.textContent = 'Local Gemma model is available. 100% private offline generation.';
+      title.textContent = `OLLAMA ONLINE (${status.model || OLLAMA_CONFIG.defaultModel})`;
+      desc.textContent = 'Ollama server reachable. Required Gemma model detected. 100% private offline generation.';
       if (btnRetry) btnRetry.style.display = 'none';
+    } else if (status.status === 'blocked') {
+      indicator.style.background = '#f97316';
+      indicator.style.boxShadow = '0 0 8px rgba(249, 115, 22, 0.4)';
+      title.textContent = 'CONNECTION BLOCKED';
+      desc.textContent = `Ollama is running, but this website is not allowed to access it yet. Add ${OLLAMA_CONFIG.githubPagesOrigin} to Ollama's allowed origins and restart Ollama.`;
+      if (btnRetry) btnRetry.style.display = 'inline-flex';
     } else if (status.status === 'model_missing') {
       indicator.style.background = '#f59e0b';
       indicator.style.boxShadow = '0 0 8px rgba(245, 158, 11, 0.4)';
-      title.textContent = `Model '${status.model || 'gemma4:e2b'}' Missing`;
-      desc.textContent = `Run in your terminal: ${status.installCommand || 'ollama pull ' + (status.model || 'gemma4:e2b')}`;
+      title.textContent = 'MODEL NOT FOUND';
+      desc.textContent = `Gemma model not found. Run: ${status.installCommand || 'ollama pull ' + OLLAMA_CONFIG.defaultModel}`;
       if (btnRetry) btnRetry.style.display = 'inline-flex';
     } else {
       indicator.style.background = '#f43f5e';
       indicator.style.boxShadow = '0 0 8px rgba(244, 63, 94, 0.4)';
-      title.textContent = 'Ollama Not Responding';
+      title.textContent = 'OLLAMA OFFLINE';
       desc.textContent = 'Start Ollama on your computer at http://127.0.0.1:11434 (Run: ollama serve).';
       if (btnRetry) btnRetry.style.display = 'inline-flex';
     }
@@ -367,7 +374,7 @@ function renderGoalInputScreen(container) {
         // Generation cancelled by user
         return;
       }
-      if (err.code === 'OLLAMA_OFFLINE' || err.code === 'MODEL_MISSING') {
+      if (err.code === 'OLLAMA_OFFLINE' || err.code === 'MODEL_MISSING' || err.code === 'CONNECTION_BLOCKED') {
         openOllamaSetupModal(err, () => {
           refreshAiStatusUI(true);
           btnSubmit.click();
@@ -991,31 +998,35 @@ function openOllamaSetupModal(err, onRetry, onContinueOffline) {
   modalEl.className = 'modal-backdrop animate-fade-in';
   modalEl.style.cssText = 'position: fixed; inset: 0; background: rgba(7, 11, 20, 0.75); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px;';
 
+  const isBlocked = err.code === 'CONNECTION_BLOCKED';
   const isModelMissing = err.code === 'MODEL_MISSING';
-  const installCmd = err.installCommand || 'ollama pull gemma4:e2b';
+  const installCmd = err.installCommand || `ollama pull ${OLLAMA_CONFIG.defaultModel}`;
+  const originCmd = `[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', '${OLLAMA_CONFIG.githubPagesOrigin}', 'User')`;
 
   modalEl.innerHTML = `
     <div class="card animate-scale-up" style="max-width: 480px; width: 100%; border: 1px solid var(--color-border); box-shadow: var(--shadow-lg); padding: 24px; border-radius: var(--radius-lg); background: var(--color-bg-surface);">
       
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 10px;">
         <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--color-text-main);">
-          🦙 Local AI Setup Required
+          ${isBlocked ? '🚫 Connection Blocked' : (isModelMissing ? '⚠️ Gemma Model Not Found' : '🦙 Local AI Setup Required')}
         </h3>
         <button class="btn btn-ghost btn-xs btn-icon" id="btn-close-ollama-modal">${getIcon('x')}</button>
       </div>
 
       <p style="font-size: 0.88rem; color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 14px;">
-        ${isModelMissing
-          ? 'Ollama is running, but the required Gemma model (<strong>gemma4:e2b</strong>) is not installed on your system yet.'
-          : 'The local Ollama service could not be reached at <code>http://127.0.0.1:11434</code>. Please ensure Ollama is started on your computer.'}
+        ${isBlocked
+          ? `Ollama is running, but this website is not allowed to access it yet. Add <strong>${OLLAMA_CONFIG.githubPagesOrigin}</strong> to Ollama's allowed origins and restart Ollama.`
+          : (isModelMissing
+            ? `Ollama is running, but the required Gemma model (<strong>${OLLAMA_CONFIG.defaultModel}</strong>) is not installed on your system yet.`
+            : 'The local Ollama service could not be reached at <code>http://127.0.0.1:11434</code>. Please ensure Ollama is started on your computer.')}
       </p>
 
       <div style="background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px;">
         <div style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 6px;">
-          ${isModelMissing ? 'Download Model Command:' : 'Start Ollama Command:'}
+          ${isBlocked ? 'Configure Allowed Origin (Windows PowerShell):' : (isModelMissing ? 'Download Model Command:' : 'Start Ollama Command:')}
         </div>
-        <code style="font-family: var(--font-mono); font-size: 0.86rem; color: var(--color-primary); display: block; word-break: break-all;">
-          ${isModelMissing ? installCmd : 'ollama serve'}
+        <code style="font-family: var(--font-mono); font-size: 0.82rem; color: var(--color-primary); display: block; word-break: break-all; line-height: 1.4;">
+          ${isBlocked ? `${originCmd}<br/><span style="color: var(--color-text-secondary); font-size: 0.76rem;">Then restart Ollama from the Windows system tray.</span>` : (isModelMissing ? installCmd : 'ollama serve')}
         </code>
       </div>
 
