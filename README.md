@@ -89,7 +89,7 @@ The application enforces a strict separation of concerns between non-determinist
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                       USER BROWSER                          │
-│  Enters goal, timeline (e.g. 90 days), hours/day (e.g. 2h)   │
+│  Enters goal, timeline (e.g. 90 days), hours/day (e.g. 2h)  │
 └──────────────────────────────┬──────────────────────────────┘
                                │ HTTP POST /api/generate-plan
                                ▼
