@@ -8,13 +8,13 @@ import { createWindowStateManager } from './windowState.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Windows Application Model ID for proper taskbar grouping and notifications
-app.setAppUserModelId('com.akshay.careertracker');
+// Windows Application Model ID for proper taskbar grouping
+app.setAppUserModelId('com.ai.studytaskplanner');
 
 // Prevent multiple duplicate instances of the application
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  console.log('[Career Tracker] Another instance is already running. Exiting.');
+  console.log('[AI Study Planner] Another instance is already running. Exiting.');
   app.quit();
 }
 
@@ -22,9 +22,8 @@ let mainWindow = null;
 let embeddedServer = null;
 
 async function createMainWindow() {
-  // Determine application base directory (works in development and packaged ASAR/dist)
   const appPath = app.getAppPath();
-  console.log('[Career Tracker] Starting application from:', appPath);
+  console.log('[AI Study Planner] Starting application from:', appPath);
 
   // Start embedded loopback server
   const { server, port, url } = await startEmbeddedServer(appPath);
@@ -45,10 +44,10 @@ async function createMainWindow() {
     y: windowManager.bounds.y,
     minWidth: 960,
     minHeight: 600,
-    title: 'Career Tracker',
+    title: 'AI Study & Task Planner',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     backgroundColor: '#F8FAFC',
-    show: true, // Immediately show on launch
+    show: true,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -67,7 +66,7 @@ async function createMainWindow() {
     mainWindow.maximize();
   }
 
-  // Native application menu with keyboard shortcuts (hidden by default, accessible via Alt)
+  // Native application menu
   const menuTemplate = [
     {
       label: 'File',
@@ -106,7 +105,7 @@ async function createMainWindow() {
   mainWindow.setAutoHideMenuBar(true);
   mainWindow.setMenuBarVisibility(false);
 
-  // External links delegate to default Windows browser (Edge/Chrome/etc.)
+  // External links delegate to default browser
   mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
     if (targetUrl.startsWith('http:') || targetUrl.startsWith('https:')) {
       shell.openExternal(targetUrl);
@@ -116,28 +115,23 @@ async function createMainWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
-    // If navigation attempts to leave the local embedded application, open in system browser
     if (!targetUrl.startsWith(url)) {
       event.preventDefault();
       shell.openExternal(targetUrl);
     }
   });
 
-  // Ensure window is shown as soon as content is ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus();
-    console.log('[Career Tracker Desktop] Window ready and shown.');
+    console.log('[AI Study Planner Desktop] Window ready and shown.');
   });
 
-  // Load the application
   await mainWindow.loadURL(url);
 
-  // Fallback: if ready-to-show already fired or delayed, ensure window is visible
   if (!mainWindow.isVisible()) {
     mainWindow.show();
     mainWindow.focus();
-    console.log('[Career Tracker Desktop] Fallback: Window shown and focused.');
   }
 
   mainWindow.on('closed', () => {
@@ -145,7 +139,6 @@ async function createMainWindow() {
   });
 }
 
-// Second instance handler (focus existing window)
 app.on('second-instance', () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();

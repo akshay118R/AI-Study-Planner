@@ -1,8 +1,8 @@
 {
-  "name": "career-tracker",
-  "productName": "Career Tracker",
-  "version": "1.0.1",
-  "description": "Career Tracker - Simple Personal Study & Habit Tracking OS (Month → Week → Today)",
+  "name": "ai-study-task-planner",
+  "productName": "AI Study & Task Planner",
+  "version": "2.0.0",
+  "description": "AI Study & Task Planner - Goal to structured Monthly, Weekly, and Daily Roadmap with Offline Tracking",
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
@@ -10,14 +10,16 @@
     "dev": "node server.js",
     "electron": "electron .",
     "electron:dev": "electron .",
+    "test": "node tests/run-all-tests.js",
+    "check:ai": "node scripts/check-ollama.js",
     "pack": "electron-builder --win --dir",
     "build": "electron-builder --win",
     "dist": "electron-builder --win"
   },
   "build": {
-    "appId": "com.akshay.careertracker",
-    "productName": "Career Tracker",
-    "copyright": "Copyright © 2026 Akshay",
+    "appId": "com.ai.studytaskplanner",
+    "productName": "AI Study & Task Planner",
+    "copyright": "Copyright © 2026",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -33,19 +35,13 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
           "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
           "arch": [
             "x64"
           ]
@@ -58,16 +54,13 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Career Tracker",
-      "uninstallDisplayName": "Career Tracker",
+      "shortcutName": "AI Study & Task Planner",
+      "uninstallDisplayName": "AI Study & Task Planner",
       "runAfterFinish": true,
-      "artifactName": "CareerTracker-Setup.${ext}"
-    },
-    "portable": {
-      "artifactName": "CareerTracker.${ext}"
+      "artifactName": "AIStudyPlanner-Setup.${ext}"
     }
   },
-  "author": "Akshay",
+  "author": "AI Planner",
   "license": "MIT",
   "devDependencies": {
     "electron": "^44.4.5",

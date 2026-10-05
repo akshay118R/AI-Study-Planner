@@ -1,5 +1,5 @@
 /**
- * Akshay's 12-Month AI/ML Career OS - Base & Typography
+ * AI Study & Task Planner - Base & Typography
  */
 
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
@@ -8,6 +8,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -29,7 +30,12 @@ html, body {
     overflow-x: hidden;
     height: auto;
     min-height: 100%;
+    -webkit-overflow-scrolling: touch;
   }
+}
+
+button, a, input, select, textarea, .today-task-card, .btn, .nav-item-btn, .mobile-nav-btn {
+  touch-action: manipulation;
 }
 
 /* Scrollbars */

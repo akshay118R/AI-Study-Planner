@@ -1,5 +1,5 @@
 /**
- * Akshay's 12-Month AI/ML Career OS - SVG Icon Library
+ * AI Study & Task Planner - SVG Icon Library
  * Crisp developer-grade icons (Lucide / Heroicons style)
  */
 

@@ -3,7 +3,7 @@ import path from 'path';
 import { screen } from 'electron';
 
 export function createWindowStateManager(userDataPath, defaultBounds = { width: 1280, height: 820 }) {
-  const stateFilePath = path.join(userDataPath, 'career-tracker-window-state.json');
+  const stateFilePath = path.join(userDataPath, 'ai-study-planner-window-state.json');
 
   let state = {
     ...defaultBounds,
@@ -20,7 +20,7 @@ export function createWindowStateManager(userDataPath, defaultBounds = { width: 
       }
     }
   } catch (err) {
-    console.warn('[Career Tracker] Could not load saved window state, using defaults:', err.message);
+    console.warn('[AI Study Planner] Could not load saved window state, using defaults:', err.message);
   }
 
   // Validate state against currently connected screens
@@ -63,11 +63,11 @@ export function createWindowStateManager(userDataPath, defaultBounds = { width: 
         try {
           fs.writeFileSync(stateFilePath, JSON.stringify(state, null, 2), 'utf8');
         } catch (err) {
-          console.warn('[Career Tracker] Failed to save window state:', err.message);
+          console.warn('[AI Study Planner] Failed to save window state:', err.message);
         }
       }, 300);
     } catch (err) {
-      console.warn('[Career Tracker] Error updating state:', err.message);
+      console.warn('[AI Study Planner] Error updating state:', err.message);
     }
   }
 

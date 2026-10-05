@@ -1,23 +1,15 @@
 /**
- * Akshay's Career Tracker - Application Bootstrap & Simplified Router
- * 
- * CORE MENTAL MODEL:
- * DASHBOARD -> MONTH -> WEEK -> TODAY -> TASK / STUDY SESSION
- * 
- * NAVIGATION:
- * 1. DASHBOARD (Default Landing Page)
- * 2. MONTH
- * 3. WEEK
- * 4. TODAY
- * 5. SETTINGS
+ * AI Study & Task Planner - Application Bootstrap & Router
+ * Generic AI-powered Study & Task Planning OS
+ * Flow: Goal -> AI Analysis -> Plan Review/Edit -> Implementation -> Tracker
  */
 
 import { initStorage, getState, updateState, subscribe } from './data/storage.js';
 import { ICONS, getIcon } from './components/icons.js';
 import { openQuickAddModal } from './components/quickAddModal.js';
 import { getCanonicalToday, formatFullDate } from './services/dateService.js';
-import { initTrackerService, syncFromSupabase } from './services/trackerService.js';
-import { SupabaseClient } from './services/supabaseClient.js';
+import { initTrackerService, getActivePlan, hasImplementedPlan } from './services/trackerService.js';
+import { checkBackendConfig } from './services/aiPlanGenerator.js';
 
 // Core Views
 import { renderDashboard, cleanupDashboardView } from './views/dashboardView.js';
@@ -25,10 +17,13 @@ import { renderToday, setTodayViewingDate, cleanupTodayView } from './views/toda
 import { renderWeekly } from './views/weeklyView.js';
 import { renderMonthly } from './views/monthlyView.js';
 import { renderSettings } from './views/settingsView.js';
+import { renderPlanView } from './views/planView.js';
 
 const ROUTES = {
   dashboard: renderDashboard,
-  progress: renderDashboard, // Alias for backward compatibility
+  plan: renderPlanView,
+  'create-plan': (container) => renderPlanView(container, { mode: 'create' }),
+  'plan-preview': renderPlanView,
   month: renderMonthly,
   monthly: renderMonthly,
   week: renderWeekly,
@@ -43,9 +38,10 @@ let currentTheme = 'light';
 export async function initApp() {
   initStorage();
   await initTrackerService();
+  checkBackendConfig();
 
   const state = getState();
-  currentTheme = localStorage.getItem('career_tracker_theme') || state.user?.theme || 'light';
+  currentTheme = localStorage.getItem('study_planner_theme') || state.settings?.theme || 'light';
   document.body.setAttribute('data-theme', currentTheme);
 
   // Render Shell
@@ -55,15 +51,18 @@ export async function initApp() {
   window.addEventListener('hashchange', handleRoute);
 
   const hash = window.location.hash.replace('#', '');
-  if (!hash || !ROUTES[hash]) {
+  const baseHash = hash.split('?')[0].toLowerCase();
+  if (!baseHash || !ROUTES[baseHash]) {
+    // If no active plan and no hash, direct to dashboard (which shows onboarding)
     window.location.hash = '#dashboard';
   } else {
     handleRoute();
   }
 
-  // Subscribe to reactive changes
+  // Subscribe to state updates to update header and navigation
   subscribe(() => {
     updateHeaderDate();
+    updateNavVisibility();
   });
 }
 
@@ -74,15 +73,15 @@ function renderAppShell() {
   const root = document.getElementById('app');
   root.innerHTML = `
     <div class="app-root">
-      <!-- Desktop Sidebar (MANDATORY ORDER: Dashboard -> Month -> Week -> Today -> Settings) -->
+      <!-- Desktop Sidebar -->
       <aside class="app-sidebar" id="app-sidebar">
         <div class="sidebar-header" style="padding: 20px 24px; border-bottom: 1px solid var(--color-border-subtle);">
           <div class="brand-title" style="font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
             <span class="logo-pulse"></span>
-            <span>Career Tracker</span>
+            <span>AI Study Planner</span>
           </div>
-          <div class="brand-subtitle" style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px;">
-            Dashboard → Month → Week → Today
+          <div class="brand-subtitle" style="font-size: 0.74rem; color: var(--color-text-muted); margin-top: 2px;">
+            Goal → Plan → Track
           </div>
         </div>
 
@@ -91,6 +90,11 @@ function renderAppShell() {
             <li>
               <button class="nav-item-btn" data-route="dashboard">
                 ${getIcon('dashboard')} <span class="nav-text">DASHBOARD</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item-btn" data-route="plan">
+                ${getIcon('sparkles')} <span class="nav-text">PLANNER</span>
               </button>
             </li>
             <li>
@@ -119,8 +123,8 @@ function renderAppShell() {
         <!-- Sidebar Footer -->
         <div style="padding: 16px 20px; border-top: 1px solid var(--color-border-subtle); display: flex; align-items: center; justify-content: space-between;">
           <div style="display: flex; flex-direction: column;">
-            <span style="font-size: 0.82rem; font-weight: 700; color: var(--color-text-main);">Akshay</span>
-            <span style="font-size: 0.72rem; color: var(--color-text-muted); font-family: var(--font-mono);">Personal Tracker</span>
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--color-text-main);">Offline-First</span>
+            <span style="font-size: 0.7rem; color: var(--color-text-muted);">Local Storage OS</span>
           </div>
         </div>
       </aside>
@@ -134,22 +138,16 @@ function renderAppShell() {
               ${getIcon('calendar', 'style="width: 14px; height: 14px;"')}
               <span>${dateFormatted}</span>
             </div>
-
-            <!-- Supabase Online/Sync Status Indicator -->
-            <button id="header-sync-status" title="Supabase Database Status (Click to test/reconnect)" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; font-weight: 600; padding: 4px 8px; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg-surface); color: var(--color-text-secondary); cursor: pointer;">
-              <span id="sync-status-dot" style="width: 7px; height: 7px; border-radius: 50%; background-color: var(--color-accent-emerald); box-shadow: 0 0 6px var(--color-accent-emerald);"></span>
-              <span id="sync-status-text">Connected</span>
-            </button>
           </div>
 
           <div style="display: flex; align-items: center; gap: 10px;">
-            <!-- Theme Mode Toggle Button (Requirement 5) -->
-            <button class="btn btn-ghost btn-sm" id="btn-theme-toggle" title="Switch Theme (Light / Dark Mode)" style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); font-weight: 600;">
+            <!-- Theme Mode Toggle -->
+            <button class="btn btn-ghost btn-sm" id="btn-theme-toggle" title="Switch Theme (Light / Dark)" style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); font-weight: 600;">
               <span id="theme-toggle-icon">${getIcon(currentTheme === 'light' ? 'moon' : 'sun', 'style="width: 14px; height: 14px;"')}</span>
               <span id="theme-toggle-label" style="font-size: 0.78rem;">${currentTheme === 'light' ? 'Dark' : 'Light'}</span>
             </button>
 
-            <!-- ONE Global + ADD Button -->
+            <!-- Global + ADD Button -->
             <button class="btn btn-primary btn-sm" id="btn-global-add" style="font-weight: 700; padding: 6px 14px; gap: 6px;">
               ${getIcon('plus')} <span>+ ADD</span>
             </button>
@@ -165,11 +163,15 @@ function renderAppShell() {
         <div class="app-content" id="view-content"></div>
       </main>
 
-      <!-- Mobile Bottom Navigation (MANDATORY ORDER: Dashboard -> Month -> Week -> Today -> Settings) -->
+      <!-- Mobile Bottom Navigation (Dashboard -> Planner -> Month -> Week -> Today -> Settings) -->
       <nav class="mobile-bottom-nav">
         <button class="mobile-nav-btn" data-route="dashboard">
           ${ICONS.dashboard}
           <span>Dashboard</span>
+        </button>
+        <button class="mobile-nav-btn" data-route="plan">
+          ${ICONS.sparkles || getIcon('sparkles')}
+          <span>Planner</span>
         </button>
         <button class="mobile-nav-btn" data-route="month">
           ${ICONS.monthly}
@@ -198,8 +200,12 @@ function renderAppShell() {
       if (r === 'today') {
         setTodayViewingDate(null);
       }
-      window.location.hash = `#${r}`;
-      handleRoute();
+      const targetHash = `#${r}`;
+      if (window.location.hash === targetHash) {
+        handleRoute();
+      } else {
+        window.location.hash = targetHash;
+      }
     });
   });
 
@@ -216,11 +222,11 @@ function renderAppShell() {
   if (btnTheme) {
     btnTheme.onclick = () => {
       currentTheme = currentTheme === 'light' ? 'dark' : 'light';
-      localStorage.setItem('career_tracker_theme', currentTheme);
+      localStorage.setItem('study_planner_theme', currentTheme);
       document.body.setAttribute('data-theme', currentTheme);
       updateState(curr => ({
         ...curr,
-        user: { ...(curr.user || {}), theme: currentTheme }
+        settings: { ...(curr.settings || {}), theme: currentTheme }
       }));
       const iconSpan = document.getElementById('theme-toggle-icon');
       const labelSpan = document.getElementById('theme-toggle-label');
@@ -229,50 +235,43 @@ function renderAppShell() {
     };
   }
 
-  // ONE Global Quick Add Button (+ ADD)
+  // Global Quick Add Button (+ ADD)
   const btnAdd = document.getElementById('btn-global-add');
   if (btnAdd) {
     btnAdd.onclick = () => openQuickAddModal(() => handleRoute());
   }
 
-  // Supabase Connection Status Watcher
-  const syncBtn = document.getElementById('header-sync-status');
-  const syncDot = document.getElementById('sync-status-dot');
-  const syncText = document.getElementById('sync-status-text');
+  updateNavVisibility();
+}
 
-  function updateSyncUI(connected) {
-    if (!syncDot || !syncText || !syncBtn) return;
-    if (connected) {
-      syncDot.style.backgroundColor = 'var(--color-accent-emerald)';
-      syncDot.style.boxShadow = '0 0 6px var(--color-accent-emerald)';
-      syncText.textContent = 'Connected';
-      syncBtn.title = 'Supabase: Connected & Synced (Click to re-verify)';
-    } else {
-      syncDot.style.backgroundColor = 'var(--color-accent-rose)';
-      syncDot.style.boxShadow = '0 0 6px var(--color-accent-rose)';
-      syncText.textContent = 'Sync unavailable';
-      syncBtn.title = 'Supabase: Connection unavailable. Click to retry sync.';
+export function updateNavVisibility() {
+  const isImplemented = hasImplementedPlan();
+
+  // Desktop Sidebar items (Month, Week, Today)
+  const sidebarNavItems = document.querySelectorAll('#app-sidebar [data-route]');
+  sidebarNavItems.forEach(btn => {
+    const r = btn.getAttribute('data-route');
+    if (r === 'month' || r === 'week' || r === 'today') {
+      const parentLi = btn.closest('li');
+      if (parentLi) {
+        parentLi.style.display = isImplemented ? '' : 'none';
+      }
     }
-  }
+  });
 
-  SupabaseClient.onConnectionChange(updateSyncUI);
+  // Mobile Bottom Nav items (Month, Week, Today)
+  const mobileNavItems = document.querySelectorAll('.mobile-bottom-nav [data-route]');
+  mobileNavItems.forEach(btn => {
+    const r = btn.getAttribute('data-route');
+    if (r === 'month' || r === 'week' || r === 'today') {
+      btn.style.display = isImplemented ? '' : 'none';
+    }
+  });
 
-  window.__triggerAppSync = async () => {
-    if (syncText) syncText.textContent = 'Syncing...';
-    await syncFromSupabase();
-    const ok = await SupabaseClient.testConnection();
-    updateSyncUI(ok);
-    handleRoute();
-  };
-
-  if (syncBtn) {
-    syncBtn.onclick = async () => {
-      syncText.textContent = 'Syncing...';
-      await syncFromSupabase();
-      const ok = await SupabaseClient.testConnection();
-      updateSyncUI(ok);
-      handleRoute();
-    };
+  // Global + ADD button in top header
+  const btnAdd = document.getElementById('btn-global-add');
+  if (btnAdd) {
+    btnAdd.style.display = isImplemented ? '' : 'none';
   }
 }
 
@@ -288,22 +287,29 @@ function updateHeaderDate() {
 function handleRoute() {
   const rawHash = window.location.hash.replace('#', '');
   const routeKey = rawHash.split('?')[0].toLowerCase();
+
+  // Guard: before a plan is implemented, do not show/navigate to month, week, or today (daily)
+  if (!hasImplementedPlan() && ['month', 'monthly', 'week', 'weekly', 'today'].includes(routeKey)) {
+    window.location.hash = '#dashboard';
+    return;
+  }
+
   const route = ROUTES[routeKey] ? routeKey : 'dashboard';
   currentRoute = route;
 
-  const highlightRoute = (route === 'progress') ? 'dashboard' : route;
+  updateNavVisibility();
 
   // Update active state in nav buttons
   document.querySelectorAll('[data-route]').forEach(btn => {
     const r = btn.getAttribute('data-route');
-    if (r === highlightRoute) {
+    if (r === route || (route === 'create-plan' && r === 'plan') || (route === 'plan-preview' && r === 'plan')) {
       btn.classList.add('active');
     } else {
       btn.classList.remove('active');
     }
   });
 
-  // Cleanup any active timers from previous views
+  // Cleanup view timers
   cleanupTodayView();
   cleanupDashboardView();
 
@@ -311,78 +317,27 @@ function handleRoute() {
     setTodayViewingDate(null);
   }
 
-  // Render the selected view
+  // Render view
   const content = document.getElementById('view-content');
   if (content && ROUTES[route]) {
     content.innerHTML = '';
     ROUTES[route](content);
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    try {
+      window.scrollTo(0, 0);
+    } catch (e) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
   }
-}
-
-/**
- * Native Android Hardware/System Back Button Handler
- * Strictly enforces native Android navigation priority:
- * 1. If a modal/dialog/drawer/overlay is open: close it first.
- * 2. If a text input or textarea is active: allow normal keyboard dismissal / blur first.
- * 3. If user is on any main application page other than Dashboard: navigate directly to Dashboard.
- * 4. If user is already on Dashboard: return 'EXIT_APP' to allow the Android Activity to exit/close.
- */
-if (typeof window !== 'undefined') {
-  window.handleAndroidBack = function() {
-    // Priority 1: Check for open modal, dialog, drawer, or backdrop overlay
-    const openBackdrop = document.querySelector(
-      '.modal-backdrop, #modal-root > *, #modal-container > *, dialog[open], .drawer-overlay'
-    );
-    if (openBackdrop) {
-      const closeBtn = openBackdrop.querySelector(
-        '#btn-close-modal, #btn-cancel-modal, #btn-close-game-modal, #btn-cancel-game-modal, #btn-close-quick-add, .btn-close, .btn-icon, [data-modal-close]'
-      ) || document.querySelector(
-        '#btn-close-modal, #btn-cancel-modal, #btn-close-game-modal, #btn-cancel-game-modal, #btn-close-quick-add, .modal-backdrop .btn-close, .modal-backdrop .btn-icon, [data-modal-close]'
-      );
-      if (closeBtn && typeof closeBtn.click === 'function') {
-        closeBtn.click();
-      } else {
-        const allBackdrops = document.querySelectorAll('.modal-backdrop, dialog[open]');
-        allBackdrops.forEach(el => el.remove());
-        const modalRoot = document.getElementById('modal-root');
-        if (modalRoot) modalRoot.innerHTML = '';
-        const modalContainer = document.getElementById('modal-container');
-        if (modalContainer) modalContainer.innerHTML = '';
-      }
-      return 'MODAL_CLOSED';
-    }
-
-    // Priority 2: Check if text input or textarea is currently focused
-    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-      document.activeElement.blur();
-      return 'INPUT_BLURRED';
-    }
-
-    // Priority 3 & 4: Route check
-    const rawHash = (window.location.hash || '').replace('#', '');
-    const currentRouteKey = rawHash.split('?')[0].toLowerCase() || 'dashboard';
-
-    if (currentRouteKey === 'dashboard' || currentRouteKey === 'progress' || currentRouteKey === '') {
-      // Already on Dashboard -> Exit app
-      if (window.AndroidBridge && typeof window.AndroidBridge.exitApp === 'function') {
-        window.AndroidBridge.exitApp();
-      }
-      return 'EXIT_APP';
-    } else {
-      // Navigate directly to Dashboard without creating browser history loops
-      if (window.location.hash !== '#dashboard') {
-        window.location.hash = '#dashboard';
-      }
-      return 'NAVIGATED_TO_DASHBOARD';
-    }
-  };
 }
 
 // Bootstrap
 if (typeof window !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', () => {
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => {
+      initApp();
+    });
+  } else {
     initApp();
-  });
+  }
 }
 

@@ -7,7 +7,7 @@ import pngToIco from 'png-to-ico';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const sourceJpg = 'C:\\Users\\Akshay\\.gemini\\antigravity-ide\\brain\\65b5fbee-b313-4d89-aec2-97d25eca0cf6\\career_tracker_icon_1790635351136.jpg';
+const sourceJpg = path.resolve(__dirname, '../build/icon.png');
 const buildDir = path.resolve(__dirname, '../build');
 
 if (!fs.existsSync(buildDir)) {
